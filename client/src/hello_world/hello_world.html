@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WASM Example</title>
+</head>
+<body>
+  <h1>WebAssembly Example</h1>
+  <p id="output"></p>
+  
+  <script>
+    // Carica il modulo WASM
+    async function loadWasm() {
+      const response = await fetch('/hello_world/hello_world.wasm?url'); // Carica il file .wasm
+      const bytes = await response.arrayBuffer();   // Ottieni il binario come ArrayBuffer
+      const wasmModule = await WebAssembly.instantiate(bytes); // Inizializza il modulo
+
+      // Usa la funzione esportata 'addTwo'
+      const addTwo = wasmModule.instance.exports.addTwo;
+      const result = addTwo(5, 3); // Somma 5 + 3
+
+      // Mostra il risultato
+      document.getElementById('output').textContent = `5 + 3 = ${result}`;
+
+      // Prova a riempire la memoria
+      const fillMemory = wasmModule.instance.exports.fillMemory;
+      const maxFilled = fillMemory();
+      console.log(maxFilled);
+    }
+    loadWasm();
+  </script>
+
+<h1>WebAssembly Browser Limits</h1>
+<button id="check-limits">Check WASM Limits</button>
+<ul id="wasm-limits"></ul>
+</body>
+</html>
