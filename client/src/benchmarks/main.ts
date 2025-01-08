@@ -6,25 +6,17 @@ import mvp_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-mvp.worker.js?ur
 import duckdb_wasm_eh from '@duckdb/duckdb-wasm/dist/duckdb-eh.wasm?url';
 import eh_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-eh.worker.js?url';
 
-import duckdb_wasm_coi from '@duckdb/duckdb-wasm/dist/duckdb-coi.wasm?url';
-import coi_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.worker.js?url';
-import pthreadWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.pthread.worker.js?url'
+// import duckdb_wasm_coi from '@duckdb/duckdb-wasm/dist/duckdb-coi.wasm?url';
+// import coi_worker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.worker.js?url';
+// import pthreadWorker from '@duckdb/duckdb-wasm/dist/duckdb-browser-coi.pthread.worker.js?url'
 
 import * as shell from '@duckdb/duckdb-wasm-shell';
 import shell_wasm from '@duckdb/duckdb-wasm-shell/dist/shell_bg.wasm?url';
 import FontFaceObserver from 'fontfaceobserver';
 
-// Data can be inserted from an existing arrow.Table
-// More Example https://arrow.apache.org/docs/js/
-import { tableFromArrays } from 'apache-arrow';
-import * as Arrow from 'apache-arrow';
-import { tableFromIPC } from "apache-arrow";
-
-
 // References to track the state and resolve DB connection
 const shellDBResolver: { current: [(db: duckdb.AsyncDuckDB) => void, (err: any) => void] | null } = { current: null };
 const shellStatusUpdater: { current: duckdb.InstantiationProgressHandler | null } = { current: null };
-
 
 const SHELL_FONT_FAMILY = 'Roboto Mono';
 
@@ -38,12 +30,12 @@ const MANUAL_BUNDLES: duckdb.DuckDBBundles = {
     mainModule: duckdb_wasm_eh,
     mainWorker: eh_worker,
   },
-  coi: {
+  //coi: {
 
-    mainModule: duckdb_wasm_coi,
-    mainWorker: coi_worker,
-    pthreadWorker
-  }
+  //  mainModule: duckdb_wasm_coi,
+  //   mainWorker: coi_worker,
+  //  pthreadWorker
+  // }
 };
 
 async function pickFilesForOPFS(db: duckdb.AsyncDuckDB): Promise<number> {
@@ -114,20 +106,12 @@ async function initializeDuckDBShell() {
   // Expose the `db` object globally
   (window as any).db = db; // Attach `db` to the `window` object
 
-
-  // await db.open({
-  //  path: 'http://localhost:5173/duck.db',
-  //  accessMode: duckdb.DuckDBAccessMode.READ_WRITE,
-  // });
-  /// const conn = await db.connect();
-
   const regular = new FontFaceObserver(SHELL_FONT_FAMILY).load();
   const bold = new FontFaceObserver(SHELL_FONT_FAMILY, { weight: 'bold' }).load();
   await Promise.all([regular, bold]);
 
   // Embed the DuckDB shell into the #shell-container div
   const shellContainer = document.getElementById('shell-container') as HTMLDivElement;
-
 
   await shell.embed({
     shellModule: shell_wasm,

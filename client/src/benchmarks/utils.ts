@@ -9,12 +9,10 @@ async function registerFileBuffer(url: string, fileName: string) {
   const fetchEndTime = performance.now(); // End timing
   console.log(`fetch time : ${(fetchEndTime - fetchStartTime).toFixed(3)} ms`);
 
-
   const startTime = performance.now(); // Start timing
   await db.registerFileBuffer(fileName, new Uint8Array(await streamResponse.arrayBuffer()))
   const endTime = performance.now(); // End timing
   console.log(`register File Buffer: ${(endTime - startTime).toFixed(3)} ms`);
-
 }
 
 async function insertJSONFromPath(fileName: string, tableName: string) {
@@ -22,6 +20,15 @@ async function insertJSONFromPath(fileName: string, tableName: string) {
   const connection = await db.connect();
   await connection.insertJSONFromPath(fileName, { name: tableName });
   await connection.close();
+}
+
+async function dropFiles(fileName: string, tableName: string) {
+  const db = (window as any).db as duckdb.AsyncDuckDB;
+
+  const s = performance.now(); // Start timing
+  await db.dropFiles();
+  const e = performance.now(); // End timing
+  console.log(`dropFiles time: ${(e - s).toFixed(3)} ms`);
 }
 
 async function insertArrowFromIPCStream(url: string, tableName: string) {
@@ -62,10 +69,70 @@ async function insertArrowFromIPCStream(url: string, tableName: string) {
   await conn.close();
 }
 
-// Attach the function to the global window object
-(window as any).registerFileBuffer = registerFileBuffer;
-(window as any).insertJSONFromPath = insertJSONFromPath;
-(window as any).insertArrowFromIPCStream = insertArrowFromIPCStream;
 
+async function writeUint8ArrayToFile(fileHandle: FileSystemFileHandle, data: Uint8Array): Promise<void> {
+  // Create a writable stream for the file
+  const writableStream = await fileHandle.createWritable();
+
+  // Write the Uint8Array data to the file
+  await writableStream.write(data);
+
+  // Close the writable stream
+  await writableStream.close();
+  console.log("Uint8Array written to OPFS file successfully.");
+}
+
+async function fileExists(opfsRoot: FileSystemDirectoryHandle, fileName: string): Promise<boolean> {
+  for await (const name of opfsRoot.keys()) {
+    if (name === fileName) {
+      return true; // File found
+    }
+  }
+  return false; // File not found
+}
+
+async function getOrCreateFile(opfsRoot: FileSystemDirectoryHandle, fileName: string): Promise<FileSystemFileHandle> {
+  const exists = await fileExists(opfsRoot, fileName);
+  if (exists) {
+    return await opfsRoot.getFileHandle(fileName);
+  }
+  return await opfsRoot.getFileHandle(fileName, { create: true });
+}
+
+async function exportParquetFile(tableName: string, fileName: string) {
+
+  const db = (window as any).db as duckdb.AsyncDuckDB;
+
+  // Check if the File System Access API is supported
+  if ('storage' in navigator && 'getDirectory' in navigator.storage) {
+    try {
+      // Get a reference to the OPFS root directory
+      const opfsRoot = await navigator.storage.getDirectory();
+      const parquetFileHandle = await getOrCreateFile(opfsRoot, fileName)
+
+      await db.registerEmptyFileBuffer(fileName);
+      const conn = await db.connect();
+      await conn.query(`COPY ${tableName} TO '${fileName}' (FORMAT PARQUET);`);
+      await conn.close();
+
+      const parquetBuffer = await db.copyFileToBuffer(`${fileName}`);
+      await writeUint8ArrayToFile(parquetFileHandle, parquetBuffer);
+      await db.dropFile(`${fileName}`)
+
+    } catch (error) {
+      console.error("An error occurred:", error);
+    }
+  } else {
+    console.error("File System Access API is not supported in this browser.");
+  }
+}
+
+// Attach the function to the global window object
+(window as any).duckdb = {};
+(window as any).duckdb.registerFileBuffer = registerFileBuffer;
+(window as any).duckdb.insertJSONFromPath = insertJSONFromPath;
+(window as any).duckdb.insertArrowFromIPCStream = insertArrowFromIPCStream;
+(window as any).duckdb.dropFiles = dropFiles;
+(window as any).duckdb.exportParquetFile = exportParquetFile;
 
 export { registerFileBuffer, insertJSONFromPath, insertArrowFromIPCStream };
