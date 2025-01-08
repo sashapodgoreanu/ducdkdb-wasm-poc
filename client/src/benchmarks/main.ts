@@ -14,7 +14,11 @@ import * as shell from '@duckdb/duckdb-wasm-shell';
 import shell_wasm from '@duckdb/duckdb-wasm-shell/dist/shell_bg.wasm?url';
 import FontFaceObserver from 'fontfaceobserver';
 
-import { createOPFSFileHandle } from './opfs'
+// Data can be inserted from an existing arrow.Table
+// More Example https://arrow.apache.org/docs/js/
+import { tableFromArrays } from 'apache-arrow';
+import * as Arrow from 'apache-arrow';
+import { tableFromIPC } from "apache-arrow";
 
 
 // References to track the state and resolve DB connection
@@ -86,6 +90,7 @@ async function getOrCreateFile(opfsRoot: FileSystemDirectoryHandle, fileName: st
   return await opfsRoot.getFileHandle(fileName, { create: true });
 }
 
+
 async function initializeDuckDBShell() {
   // Select the DuckDB bundle
   const bundle = await duckdb.selectBundle(MANUAL_BUNDLES);
@@ -108,74 +113,6 @@ async function initializeDuckDBShell() {
 
   // Expose the `db` object globally
   (window as any).db = db; // Attach `db` to the `window` object
-
-  // Check if the File System Access API is supported
-  if ('storage' in navigator && 'getDirectory' in navigator.storage) {
-    try {
-      // Get a reference to the OPFS root directory
-      const opfsRoot = await navigator.storage.getDirectory();
-
-      const csvFileHandle = await getOrCreateFile(opfsRoot, "students.csv")
-      const parquetFileHandle = await getOrCreateFile(opfsRoot, "students.parquet")
-
-      const csvFile = await csvFileHandle.getFile();
-      const csvFileBuf = await csvFile.arrayBuffer();
-      const writable = await csvFileHandle.createWritable();
-
-      const encoder = new TextEncoder();
-
-      const streamResponse = await fetch(`api/data`);
-      const buffer = new Uint8Array(await streamResponse.arrayBuffer());
-      await db.registerFileBuffer('json_input_buffer.json', buffer);
-
-
-      await db.registerFileHandle('students-opfs.csv', csvFileHandle, duckdb.DuckDBDataProtocol.BUFFER, false);
-      // await db.registerFileHandle('students.parquet', parquetFileHandle, duckdb.DuckDBDataProtocol.BROWSER_FILEREADER, false);
-
-      await db.registerFileBuffer("students.csv", new Uint8Array(csvFileBuf));
-      // await db.registerFileBuffer("students.parquet", new Uint8Array(pFileeBuf));
-
-      // await db.registerEmptyFileBuffer('students-buffer.csv');
-      // await db.registerEmptyFileBuffer('students-buffer.parquet');
-
-      db.insertArrowFromIPCStream
-
-
-      const conn = await db.connect();
-
-
-      //conn.insertJSONFromPath('json_input_buffer', {
-      //  schema: 'main',
-      //  name: 'foo',
-      //})
-
-
-      // await conn.query(`CREATE TABLE students (name int);`);
-      // await conn.query(`insert into students values (1);`);
-      // await conn.query(`COPY students TO 'students.csv' WITH (HEADER 1, DELIMITER ';', FORMAT CSV);`);
-      // await conn.query(`COPY students TO 'students.parquet' (FORMAT PARQUET);`);
-      // await db.flushFiles();
-
-      // await conn.query(`DROP TABLE IF EXISTS students`);
-      await conn.close();
-      const csvBuffer = await db.copyFileToBuffer('students.csv');
-      const jsonBuffer = await db.copyFileToBuffer('json_input_buffer');
-      // const parquetBuffer = await db.copyFileToBuffer('students.parquet');
-      await writeUint8ArrayToFile(csvFileHandle, csvBuffer);
-      // await writeUint8ArrayToFile(parquetFileHandle, parquetBuffer);
-
-      // await db.copyFileToPath('students-buffer.csv', "/students-buffer.csv");
-      const decoder = new TextDecoder();
-      const text = decoder.decode(csvBuffer!);
-      console.log(text);
-
-    } catch (error) {
-      console.error("An error occurred:", error);
-    }
-  } else {
-    console.error("File System Access API is not supported in this browser.");
-  }
-
 
 
   // await db.open({
@@ -224,3 +161,4 @@ async function initializeDuckDBShell() {
 initializeDuckDBShell().catch((error) => {
   console.error('Failed to initialize DuckDB Shell:', error);
 });
+

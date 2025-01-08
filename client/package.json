@@ -22,6 +22,7 @@
   "dependencies": {
     "@duckdb/duckdb-wasm": "^1.29.0",
     "@duckdb/duckdb-wasm-shell": "1.29.0",
+    "apache-arrow": "^18.1.0",
     "chart.js": "^4.4.7",
     "fontfaceobserver": "^2.3.0",
     "vite-plugin-wasm": "^3.3.0",

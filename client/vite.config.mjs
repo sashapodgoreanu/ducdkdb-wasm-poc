@@ -10,15 +10,11 @@ export default defineConfig({
   plugins: [wasm()],
   server: {
     headers: {
-      "Cross-Origin-Opener-Policy": "same-origin",
-      "Cross-Origin-Embedder-Policy": "require-corp",
+      // "Cross-Origin-Opener-Policy": "same-origin",
+      // "Cross-Origin-Embedder-Policy": "require-corp",
     },
     // Configura una route API inline
     proxy: {
-      "/api": {
-        target: "http://localhost:3000", // URL del server API
-        changeOrigin: true, // Cambia l'origine della richiesta
-      },
       "/api": {
         target: "http://localhost:5214", // URL del server API
         changeOrigin: true, // Cambia l'origine della richiesta
