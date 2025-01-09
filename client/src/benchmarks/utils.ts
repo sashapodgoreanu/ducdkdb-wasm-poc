@@ -48,8 +48,8 @@ async function insertArrowFromIPCStream(url: string, tableName: string) {
 
   const startTime = performance.now(); // Start timing
 
-  let streamReader = streamResponse.body.getReader();
-  let streamInserts = [];
+  const streamReader = streamResponse.body.getReader();
+  const streamInserts = [];
 
   while (true) {
     const { value, done } = await streamReader.read();
@@ -127,6 +127,20 @@ async function exportParquetFile(tableName: string, fileName: string) {
   }
 }
 
+async function registerParquetFileBuffer(opfsFilePath: string, duckdbFileName: string) {
+  // From API
+  const db = (window as any).db as duckdb.AsyncDuckDB;
+
+  const opfsRoot = await navigator.storage.getDirectory();
+  const parquetFileHandle = await getOrCreateFile(opfsRoot, opfsFilePath);
+  const parquetFile = await parquetFileHandle.getFile();
+
+  const startTime = performance.now(); // Start timing
+  await db.registerFileBuffer(duckdbFileName, new Uint8Array(await parquetFile.arrayBuffer()))
+  const endTime = performance.now(); // End timing
+  console.log(`register OPFS File Buffer: ${(endTime - startTime).toFixed(3)} ms`);
+}
+
 // Attach the function to the global window object
 (window as any).duckdb = {};
 (window as any).duckdb.registerFileBuffer = registerFileBuffer;
@@ -134,5 +148,6 @@ async function exportParquetFile(tableName: string, fileName: string) {
 (window as any).duckdb.insertArrowFromIPCStream = insertArrowFromIPCStream;
 (window as any).duckdb.dropFiles = dropFiles;
 (window as any).duckdb.exportParquetFile = exportParquetFile;
+(window as any).duckdb.registerParquetFileBuffer = registerParquetFileBuffer;
 
-export { registerFileBuffer, insertJSONFromPath, insertArrowFromIPCStream };
+export { registerFileBuffer, insertJSONFromPath, insertArrowFromIPCStream, registerParquetFileBuffer };

@@ -85,18 +85,76 @@ app.MapGet("/api/arrow/{filename}/{limit?}", async (string filename, int? limit,
   await writer.WriteEndAsync();
 });
 
-app.MapGet("/api/files/{filename}", (string filename) =>
+app.MapGet("/api/files/{filename}", async (HttpContext context, string filename) =>
 {
-  // Path to the Parquet file
-  string parquetFilePath = Path.Combine(Directory.GetCurrentDirectory(), "static_files", filename);
+  // Path to the file
+  string filePath = Path.Combine(Directory.GetCurrentDirectory(), "static_files", filename);
 
-  // Open a stream to the file and return it as a FileStreamResult
-  var fileStream = new FileStream(parquetFilePath, FileMode.Open, FileAccess.Read);
-  var contentType = "application/octet-stream"; // Use appropriate MIME type if known
-  var fileDownloadName = filename; // Name for the downloaded file
+  if (!System.IO.File.Exists(filePath))
+  {
+    context.Response.StatusCode = StatusCodes.Status404NotFound;
+    await context.Response.WriteAsync("File not found.");
+    return;
+  }
 
-  return Results.File(fileStream, contentType, fileDownloadName);
+  var fileInfo = new FileInfo(filePath);
+  var fileLength = fileInfo.Length;
+  var contentType = "application/octet-stream"; // Adjust MIME type as needed
+
+  string rangeHeader = context.Request.Headers["Range"];
+  if (string.IsNullOrEmpty(rangeHeader))
+  {
+    // No Range header present, return the entire file
+    context.Response.Headers["Content-Length"] = fileLength.ToString();
+    context.Response.Headers["Accept-Ranges"] = "bytes";
+    context.Response.ContentType = contentType;
+
+    await context.Response.SendFileAsync(filePath);
+    return;
+  }
+
+  // Parse the Range header (e.g., "bytes=0-999")
+  if (!rangeHeader.StartsWith("bytes=", StringComparison.OrdinalIgnoreCase))
+  {
+    context.Response.StatusCode = StatusCodes.Status416RequestedRangeNotSatisfiable;
+    return;
+  }
+
+  var range = rangeHeader["bytes=".Length..].Split('-');
+  if (range.Length != 2 ||
+      !long.TryParse(range[0], out long rangeStart) ||
+      (range[1].Length > 0 && !long.TryParse(range[1], out _)))
+  {
+    context.Response.StatusCode = StatusCodes.Status416RequestedRangeNotSatisfiable;
+    return;
+  }
+
+  long rangeEnd = range.Length > 1 && range[1].Length > 0 ? long.Parse(range[1]) : fileLength - 1;
+
+  if (rangeStart < 0 || rangeEnd >= fileLength || rangeStart > rangeEnd)
+  {
+    context.Response.StatusCode = StatusCodes.Status416RequestedRangeNotSatisfiable;
+    return;
+  }
+
+  // Set response headers for partial content
+  context.Response.StatusCode = StatusCodes.Status206PartialContent;
+  context.Response.Headers["Content-Range"] = $"bytes {rangeStart}-{rangeEnd}/{fileLength}";
+  context.Response.Headers["Content-Length"] = (rangeEnd - rangeStart + 1).ToString();
+  context.Response.Headers["Accept-Ranges"] = "bytes";
+  context.Response.ContentType = contentType;
+
+  // Write the requested range to the response
+  using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+  fileStream.Seek(rangeStart, SeekOrigin.Begin);
+
+  // Create a buffer to copy the exact range
+  var bufferSize = (int)(rangeEnd - rangeStart + 1);
+  var buffer = new byte[bufferSize];
+  await fileStream.ReadAsync(buffer, 0, bufferSize);
+  await context.Response.Body.WriteAsync(buffer, 0, bufferSize);
 });
+
 
 
 static RecordBatch CreateSampleRecordBatch()
